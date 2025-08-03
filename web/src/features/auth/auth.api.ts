@@ -4,19 +4,11 @@ import { RegisterInput } from "./schema/auth-schema";
 // Helper function to set token in both localStorage and cookies
 function setAuthToken(token: string) {
   localStorage.setItem("accessToken", token);
-
-  if (typeof document !== "undefined") {
-    document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Strict`;
-  }
 }
 
 // Helper function to clear token from both localStorage and cookies
 function clearAuthToken() {
   localStorage.removeItem("accessToken");
-
-  if (typeof document !== "undefined") {
-    document.cookie = `token=; path=/; max-age=0; SameSite=Strict`;
-  }
 }
 
 export async function loginUser(email: string, password: string) {
