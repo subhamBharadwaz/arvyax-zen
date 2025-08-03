@@ -15,38 +15,21 @@ import env from "./env";
 const app = express();
 const errorHandler = new ErrorHandler(logger);
 
-// CORS configuration - more explicit for production
 const origins = env.ORIGIN?.split(",").map((o) => o.trim()) ?? [];
 
-// Add localhost for development if needed
 if (env.NODE_ENV === "development") {
   origins.push("http://localhost:3000", "http://127.0.0.1:3000");
 }
 
-console.log("Allowed origins:", origins); // Debug log
-
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-
-      if (origins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        console.log("Blocked origin:", origin); // Debug log
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
+    origin: origins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     exposedHeaders: ["Set-Cookie"],
   }),
 );
-
-// Handle preflight requests
-app.options("*", cors());
 
 // regular middleware
 app.use(express.json());
