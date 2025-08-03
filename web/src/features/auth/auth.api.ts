@@ -9,6 +9,10 @@ function setAuthToken(token: string) {
 // Helper function to clear token from both localStorage and cookies
 function clearAuthToken() {
   localStorage.removeItem("accessToken");
+
+  if (typeof document !== "undefined") {
+    document.cookie = `token=; path=/; max-age=0; SameSite=Strict`;
+  }
 }
 
 export async function loginUser(email: string, password: string) {
@@ -52,6 +56,7 @@ export async function logoutUser() {
       }
     }
 
+    // Clear tokens from client storage
     clearAuthToken();
 
     // Redirect to sign in page
@@ -60,6 +65,7 @@ export async function logoutUser() {
     }
   } catch (error) {
     console.error("Logout failed:", error);
+    // Even if logout fails, clear local tokens and redirect
     clearAuthToken();
     if (typeof window !== "undefined") {
       window.location.href = "/login";
