@@ -1,13 +1,15 @@
 import dotEnv from "dotenv";
-dotEnv.config({ path: "../.env" });
+dotEnv.config();
 
 import app from "./app";
-import { connectToDB, logger } from "./utils";
+import { connectToDB } from "./utils";
 import { disconnectFromDatabase } from "./utils/db";
+import env from "./env";
+import { logger } from "./middlewares";
 
 connectToDB();
 
-const PORT = process.env.PORT || 4000;
+const PORT = env.PORT || 4000;
 
 const server = app.listen(PORT, () => {
   logger.info(`Server is running at http://localhost:${PORT}`);

@@ -1,4 +1,4 @@
-import logger from "../logger";
+import { logger } from "../../middlewares";
 import BaseError from "./base-error";
 
 class ErrorHandler {
