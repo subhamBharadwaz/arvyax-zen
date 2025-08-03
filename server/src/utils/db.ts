@@ -1,8 +1,9 @@
 import mongoose from "mongoose";
-import { logger } from "./index";
+import { logger } from "../middlewares";
+import env from "../env";
 
 const connectToDB = () => {
-  const dbUrl = process.env.DBURL as string;
+  const dbUrl = env.DATABASE_URL;
   mongoose
     .connect(dbUrl)
     .then(() => logger.info(`✅ DB Connected`))
