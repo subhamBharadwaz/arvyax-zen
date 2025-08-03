@@ -162,16 +162,16 @@ export function NavbarClient({ user, isAuthenticated }: NavbarClientProps) {
 
           {/* Mobile menu button */}
           <div className="md:hidden">
-            <button
+            <Button
               onClick={toggleMobileMenu}
-              className="text-gray-700 hover:text-emerald-600 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors duration-200"
+              className="text-foreground hover:text-accent-foreground p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-foreground transition-colors duration-200"
             >
               {isMobileMenuOpen ? (
                 <X className="h-6 w-6" />
               ) : (
                 <Menu className="h-6 w-6" />
               )}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -222,26 +222,26 @@ export function NavbarClient({ user, isAuthenticated }: NavbarClientProps) {
                   <>
                     <Link
                       href="/#about"
-                      className="text-gray-700 hover:text-emerald-600 hover:bg-gray-50 w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors duration-200"
+                      className="text-foreground hover:text-accent-foreground w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors duration-200"
                     >
                       About
                     </Link>
                     <Link
                       href="/#features"
-                      className="text-gray-700 hover:text-emerald-600 hover:bg-gray-50 w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors duration-200"
+                      className="text-foreground hover:text-accent w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors duration-200"
                     >
                       Features
                     </Link>
                     <Link
                       href="/#pricing"
-                      className="text-gray-700 hover:text-emerald-600 hover:bg-gray-50 w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors duration-200"
+                      className="text-foreground hover:text-accent-foreground w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors duration-200"
                     >
                       Pricing
                     </Link>
                     <hr className="my-2" />
                     <Link
                       href="/login"
-                      className="text-gray-700 hover:text-emerald-600 hover:bg-gray-50 w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors duration-200"
+                      className={cn(buttonVariants(), "text-background")}
                     >
                       Sign in
                     </Link>
