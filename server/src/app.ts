@@ -10,24 +10,23 @@ import { HttpStatusCode } from "./types/http.model";
 import user from "./modules/user/user.route";
 import session from "./modules/session/session.route";
 import { logger } from "./middlewares";
-import env from "./env";
 
 const app = express();
 const errorHandler = new ErrorHandler(logger);
 
-const origins = env.ORIGIN?.split(",").map((o) => o.trim()) ?? [];
+// Get origin from environment variable - same pattern as working app
+const origin = process.env.ORIGIN || "http://localhost:3000";
 
-if (env.NODE_ENV === "development") {
-  origins.push("http://localhost:3000", "http://127.0.0.1:3000");
-}
+console.log("🚀 Starting server...");
+console.log("Environment:", process.env.NODE_ENV);
+console.log("Port:", process.env.PORT);
+console.log("Origin:", origin);
 
+// cors - using the same pattern as your working app
 app.use(
   cors({
-    origin: origins,
+    origin: origin,
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    exposedHeaders: ["Set-Cookie"],
   }),
 );
 
@@ -38,23 +37,24 @@ app.use(express.urlencoded({ extended: true }));
 // cookies middleware
 app.use(cookieParser());
 
-// set security headers - modify helmet for CORS
-app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-  }),
-);
+// set security headers
+app.use(helmet());
 
 // Add a health check endpoint
 app.get("/health", (req, res) => {
-  res.json({ status: "OK", timestamp: new Date().toISOString() });
+  res.json({
+    status: "OK",
+    timestamp: new Date().toISOString(),
+    origin: origin,
+    env: process.env.NODE_ENV,
+  });
 });
 
 // router middleware
 app.use("/api/v1", user);
 app.use("/api/v1", session);
 
-// Handling errors
+// Handling errors - using the same pattern as your working app
 app.use(errorMiddleware);
 
 process.on("uncaughtException", async (error: Error) => {
@@ -66,24 +66,25 @@ process.on("unhandledRejection", (reason: Error) => {
   throw reason;
 });
 
+// Error middleware - same pattern as your working app
 async function errorMiddleware(
-  error: BaseError,
+  err: BaseError,
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
-  if (!errorHandler.isTrustedError(error)) {
+  if (!errorHandler.isTrustedError(err)) {
     res.status(HttpStatusCode.INTERNAL_SERVER).json({
       error: "Something went wrong, please try again later.",
       code: HttpStatusCode.INTERNAL_SERVER,
     });
-    next(error);
+    next(err);
     return;
   }
-  await errorHandler.handleError(error);
-  res.status(error.httpCode).json({
-    error: error.message,
-    code: error.httpCode,
+  await errorHandler.handleError(err);
+  res.status(err.httpCode).json({
+    error: err.message,
+    code: err.httpCode,
   });
 }
 
