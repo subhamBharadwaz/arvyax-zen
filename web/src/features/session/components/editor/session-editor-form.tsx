@@ -67,7 +67,6 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
     };
   }, []);
 
-  // Fetch session data with proper typing
   const {
     data: sessionData,
     isLoading,
@@ -78,15 +77,16 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
     queryFn: () => fetchSessionById(sessionId),
     enabled: !!sessionId,
     retry: (failureCount, error) => {
-      // Don't retry on 401 errors (authentication issues)
       if (error instanceof Error && error.message.includes("401")) {
         return false;
       }
       return failureCount < 3;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000, // Reduced to 30 seconds
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true, // Enable refetch on window focus
+    refetchOnReconnect: true,
   });
 
   const form = useForm<SessionFormData>({
@@ -103,17 +103,33 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
   const hasInitializedRef = useRef(false);
   const queryClient = useQueryClient();
 
-  // Update sessionIdRef when sessionId changes
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
-  // Initialize form with session data - only once when data is loaded
+  useEffect(() => {
+    hasInitializedRef.current = false;
+    lastAutoSaveRef.current = "";
+  }, [sessionId]);
+
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [queryClient, sessionId]);
+
   useEffect(() => {
     if (sessionData && !hasInitializedRef.current) {
       hasInitializedRef.current = true;
 
-      // Extract the actual session data from the response
       const actualSessionData = sessionData.session;
 
       const formData = {
@@ -130,10 +146,12 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
         Array.isArray(actualSessionData.tags) ? actualSessionData.tags : [],
       );
 
-      // Reset form with fetched data
-      form.reset(formData);
+      form.reset(formData, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+      });
 
-      // Set tags array
       setTags(
         Array.isArray(actualSessionData.tags) ? actualSessionData.tags : [],
       );
@@ -165,22 +183,111 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
   const saveDraftMutation = useMutation({
     mutationFn: saveDraftSession,
     onSuccess: (data) => {
+      console.log("Save draft success:", data);
+
       if (data.session?._id && !sessionIdRef.current) {
         sessionIdRef.current = data.session._id;
+        console.log("Updated sessionIdRef to:", data.session._id);
       }
-      // Invalidate the query cache to refetch fresh data
-      queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+
+      if (data.session) {
+        queryClient.setQueryData(["session", sessionIdRef.current], data);
+
+        queryClient.setQueryData(["my-sessions"], (oldData: any) => {
+          console.log("Updating my-sessions cache with:", data.session);
+          if (!oldData?.pages) return oldData;
+
+          let sessionFound = false;
+          const updatedData = {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              sessions: page.sessions.map((session: any) => {
+                if (session._id === data.session._id) {
+                  sessionFound = true;
+                  return { ...session, ...data.session };
+                }
+                return session;
+              }),
+            })),
+          };
+
+          if (!sessionFound && oldData.pages.length > 0) {
+            console.log("Session not found in cache, adding to first page");
+            updatedData.pages[0] = {
+              ...updatedData.pages[0],
+              sessions: [data.session, ...updatedData.pages[0].sessions],
+            };
+          }
+
+          return updatedData;
+        });
+      }
+
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["my-sessions"] });
+        queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+      }, 100);
     },
-    onError: () => toast.error("Failed to save draft."),
+    onError: (error) => {
+      console.error("Save draft error:", error);
+      toast.error("Failed to save draft.");
+    },
   });
 
   const publishSessionMutation = useMutation({
     mutationFn: publishSession,
-    onSuccess: () => toast("Published Successfully"),
+    onSuccess: (data) => {
+      toast("Published Successfully");
+
+      if (data?.session) {
+        queryClient.setQueryData(["session", sessionIdRef.current], data);
+
+        queryClient.setQueryData(["my-sessions"], (oldData: any) => {
+          console.log(
+            "Updating my-sessions cache with published session:",
+            data.session,
+          );
+          if (!oldData?.pages) return oldData;
+
+          let sessionFound = false;
+          const updatedData = {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              sessions: page.sessions.map((session: any) => {
+                if (session._id === data.session._id) {
+                  sessionFound = true;
+                  return { ...session, ...data.session };
+                }
+                return session;
+              }),
+            })),
+          };
+
+          if (!sessionFound && oldData.pages.length > 0) {
+            console.log(
+              "Published session not found in cache, adding to first page",
+            );
+            updatedData.pages[0] = {
+              ...updatedData.pages[0],
+              sessions: [data.session, ...updatedData.pages[0].sessions],
+            };
+          }
+
+          return updatedData;
+        });
+      }
+
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["my-sessions"] });
+        queryClient.invalidateQueries({ queryKey: ["public-sessions"] });
+        queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+      }, 100);
+    },
     onError: () => toast.error("Failed to publish session."),
   });
 
-  // Debounced auto-save
   const debouncedAutoSave = useDebounceCallback(async () => {
     // Only auto-save if session exists, form has been initialized with data, and tab is active
     if (
@@ -189,6 +296,12 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
       !sessionData ||
       !isTabActive
     ) {
+      console.log("Auto-save skipped - conditions not met:", {
+        sessionId: sessionIdRef.current,
+        initialized: hasInitializedRef.current,
+        hasData: !!sessionData,
+        tabActive: isTabActive,
+      });
       return;
     }
 
@@ -200,15 +313,19 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
       tags,
       "Tags length:",
       tags.length,
+      "Form data:",
+      data,
     );
 
     // Prevent duplicate saves
     if (currentDataHash === lastAutoSaveRef.current) {
+      console.log("Auto-save skipped - no changes detected");
       return;
     }
 
-    // Don't save if all fields are empty (prevents saving empty data)
-    if (!data.title.trim() && !data.json_file_url.trim() && tags.length === 0) {
+    // Only auto-save if there are meaningful changes (at least title or content)
+    if (!data.title.trim() && !data.json_file_url.trim()) {
+      console.log("Auto-save skipped - no meaningful content");
       return;
     }
 
@@ -219,32 +336,136 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
       sessionId: sessionIdRef.current,
     };
 
-    console.log("Auto-save payload tags:", payload.tags);
+    console.log("Auto-save payload:", payload);
+
+    const optimisticSessionData = {
+      title: data.title || "Untitled Session",
+      tags: payload.tags,
+      json_file_url: data.json_file_url,
+      updated_at: new Date().toISOString(),
+      status: "draft",
+    };
+
+    queryClient.setQueryData(["my-sessions"], (oldData: any) => {
+      console.log("Auto-save: Optimistically updating my-sessions cache");
+      if (!oldData?.pages) return oldData;
+
+      let sessionFound = false;
+      const updatedData = {
+        ...oldData,
+        pages: oldData.pages.map((page: any) => ({
+          ...page,
+          sessions: page.sessions.map((session: any) => {
+            if (session._id === sessionIdRef.current) {
+              sessionFound = true;
+              return { ...session, ...optimisticSessionData };
+            }
+            return session;
+          }),
+        })),
+      };
+
+      if (!sessionFound && oldData.pages.length > 0) {
+        console.log("Auto-save: Session not found, adding to first page");
+        updatedData.pages[0] = {
+          ...updatedData.pages[0],
+          sessions: [
+            { _id: sessionIdRef.current, ...optimisticSessionData },
+            ...updatedData.pages[0].sessions,
+          ],
+        };
+      }
+
+      return updatedData;
+    });
+
+    queryClient.setQueryData(
+      ["session", sessionIdRef.current],
+      (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          session: {
+            ...oldData.session,
+            ...optimisticSessionData,
+          },
+        };
+      },
+    );
 
     try {
-      await saveDraftSession(payload);
+      const response = await saveDraftSession(payload);
+
+      if (response.session?._id && !sessionIdRef.current) {
+        sessionIdRef.current = response.session._id;
+        console.log("Updated sessionIdRef to:", response.session._id);
+      }
+
+      if (response.session) {
+        queryClient.setQueryData(["session", sessionIdRef.current], response);
+
+        queryClient.setQueryData(["my-sessions"], (oldData: any) => {
+          console.log(
+            "Auto-save success: Updating my-sessions cache with response:",
+            response.session,
+          );
+          if (!oldData?.pages) return oldData;
+
+          let sessionFound = false;
+          const updatedData = {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              sessions: page.sessions.map((session: any) => {
+                if (session._id === response.session._id) {
+                  sessionFound = true;
+                  return { ...session, ...response.session };
+                }
+                return session;
+              }),
+            })),
+          };
+
+          if (!sessionFound && oldData.pages.length > 0) {
+            console.log(
+              "Auto-save success: Session not found, adding to first page",
+            );
+            updatedData.pages[0] = {
+              ...updatedData.pages[0],
+              sessions: [response.session, ...updatedData.pages[0].sessions],
+            };
+          }
+
+          return updatedData;
+        });
+      }
+
       lastAutoSaveRef.current = currentDataHash;
+
       toast("Auto-saved", {
         description: "Your changes have been automatically saved.",
+        duration: 2000,
       });
     } catch (error) {
       console.error("Auto-save failed:", error);
       toast.error("Auto-save failed");
+
+      queryClient.invalidateQueries({ queryKey: ["my-sessions"] });
+      queryClient.invalidateQueries({
+        queryKey: ["session", sessionIdRef.current],
+      });
     }
   }, 3000);
 
-  // Watch form changes for auto-save
   const watchedValues = form.watch();
 
   useEffect(() => {
-    // Only start auto-saving after form is initialized with data and tab is active
     if (
       sessionIdRef.current &&
       hasInitializedRef.current &&
       sessionData &&
       isTabActive
     ) {
-      // Add a small delay to ensure form is fully initialized
       const timer = setTimeout(() => {
         debouncedAutoSave();
       }, 1000);
@@ -252,6 +473,12 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
       return () => clearTimeout(timer);
     }
   }, [watchedValues, tags, debouncedAutoSave, sessionData, isTabActive]);
+
+  useEffect(() => {
+    return () => {
+      debouncedAutoSave.cancel();
+    };
+  }, [debouncedAutoSave]);
 
   const handleRemoveTag = (tagToRemove: string) => {
     const newTags = tags.filter((tag) => tag !== tagToRemove);
@@ -267,7 +494,6 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
   };
 
   const handleSubmit = async (data: SessionFormData) => {
-    // Validate for publish only
     if (submitStatus === "published") {
       try {
         publishSessionSchema.parse(data);
@@ -283,21 +509,7 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
       }
     }
 
-    // Ensure we have a sessionId for publishing
     const currentSessionId = sessionIdRef.current || sessionId;
-
-    console.log("Submitting session:", {
-      submitStatus,
-      sessionId: currentSessionId,
-      sessionIdRef: sessionIdRef.current,
-      propSessionId: sessionId,
-      payload: {
-        ...data,
-        tags: tags.map((tag) => tag.trim()).filter(Boolean),
-        status: submitStatus,
-        sessionId: currentSessionId,
-      },
-    });
 
     const payload: SessionPayload = {
       ...data,
@@ -308,15 +520,17 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
 
     try {
       if (submitStatus === "draft") {
-        const response = await saveDraftSession(payload);
+        const response = await saveDraftMutation.mutateAsync(payload);
+
         if (response.session?._id && !sessionIdRef.current) {
           sessionIdRef.current = response.session._id;
         }
+
         toast("Saved as Draft", {
           description: "Your session has been saved.",
         });
       } else {
-        await publishSession(payload);
+        await publishSessionMutation.mutateAsync(payload);
         toast("Published Successfully", {
           description: "Your session has been published.",
         });
@@ -343,54 +557,60 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
     );
   }
 
-  if (isError) {
-    return (
-      <Card className="w-full max-w-2xl mx-auto">
-        <CardContent className="p-8">
-          <div className="space-y-4">
-            <div className="text-red-500 text-center">
-              Error loading session. Please try refreshing the page.
-            </div>
+  const handleSubmitWithStatus = async (
+    data: SessionFormData,
+    status: "draft" | "published",
+  ) => {
+    if (status === "published") {
+      try {
+        publishSessionSchema.parse(data);
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          err.issues.forEach((error) => {
+            form.setError(error.path[0] as keyof SessionFormData, {
+              message: error.message,
+            });
+          });
+        }
+        return;
+      }
+    }
 
-            {/* Debug information */}
-            <div className="bg-muted p-4 rounded-lg text-sm">
-              <h3 className="font-semibold mb-2">Debug Information:</h3>
-              <div>Session ID: {sessionId}</div>
-              <div>Error: {error?.message}</div>
-              <div>
-                Has localStorage Token:{" "}
-                {typeof window !== "undefined"
-                  ? !!localStorage.getItem("accessToken")
-                  : "Unknown"}
-              </div>
-              <div>
-                Has Cookie Token:{" "}
-                {typeof document !== "undefined"
-                  ? !!document.cookie.includes("token=")
-                  : "Unknown"}
-              </div>
-              <div>
-                All Cookies:{" "}
-                {typeof document !== "undefined" ? document.cookie : "N/A"}
-              </div>
-            </div>
+    const currentSessionId = sessionIdRef.current || sessionId;
+    const payload: SessionPayload = {
+      ...data,
+      tags: tags.map((tag) => tag.trim()).filter(Boolean),
+      status,
+      sessionId: currentSessionId,
+    };
 
-            <div className="text-center">
-              <Button
-                onClick={() => (window.location.href = "/login")}
-                variant="outline"
-              >
-                Go to Login
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+    try {
+      if (status === "draft") {
+        const response = await saveDraftMutation.mutateAsync(payload);
+        if (response.session?._id && !sessionIdRef.current) {
+          sessionIdRef.current = response.session._id;
+        }
+        toast("Saved as Draft", {
+          description: "Your session has been saved.",
+        });
+      } else {
+        await publishSessionMutation.mutateAsync(payload);
+        toast("Published Successfully", {
+          description: "Your session has been published.",
+        });
+      }
+    } catch (error) {
+      console.error("Submit error:", error);
+      toast.error(
+        status === "draft"
+          ? "Failed to save draft."
+          : "Failed to publish session.",
+      );
+    }
+  };
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
+    <Card className="w-full max-w-2xl mx-auto px-4 sm:px-6">
       <CardHeader>
         <CardTitle className="text-2xl font-semibold text-primary">
           {sessionData?.session?.title ? "Edit Session" : "Create New Session"}
@@ -487,27 +707,33 @@ export function SessionEditorForm({ sessionId }: SessionEditorFormProps) {
               )}
             />
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex flex-col gap-6 pt-4">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setSubmitStatus("draft");
-                  form.handleSubmit(handleSubmit)();
+                  form.handleSubmit((data) =>
+                    handleSubmitWithStatus(data, "draft"),
+                  )();
                 }}
-                className="flex-1 border-border hover:bg-muted text-foreground"
+                className=" border-border cursor-pointer hover:bg-muted text-foreground"
+                disabled={saveDraftMutation.isPending}
               >
-                Save as Draft
+                {saveDraftMutation.isPending ? "Saving..." : "Save as Draft"}
               </Button>
               <Button
                 type="button"
                 onClick={() => {
-                  setSubmitStatus("published");
-                  form.handleSubmit(handleSubmit)();
+                  form.handleSubmit((data) =>
+                    handleSubmitWithStatus(data, "published"),
+                  )();
                 }}
-                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
+                className=" border-border cursor-pointer hover:bg-muted text-foreground"
+                disabled={publishSessionMutation.isPending}
               >
-                Publish Session
+                {publishSessionMutation.isPending
+                  ? "Publishing..."
+                  : "Publish Session"}
               </Button>
             </div>
           </form>

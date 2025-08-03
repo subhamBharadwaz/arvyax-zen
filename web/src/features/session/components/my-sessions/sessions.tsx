@@ -9,7 +9,6 @@ import {
 import { SessionData } from "../../types";
 import { Session } from "./session-card";
 import { SessionGrid } from "./sessions-grid";
-import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
 export const Sessions = () => {
@@ -18,7 +17,6 @@ export const Sessions = () => {
   const router = useRouter();
   const observerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch sessions data with infinite query
   const {
     data,
     fetchNextPage,
@@ -27,8 +25,9 @@ export const Sessions = () => {
     isLoading,
     isError,
     error,
+    refetch,
   } = useInfiniteQuery({
-    queryKey: ["my-sessions"],
+    queryKey: ["my-sessions"], // Fixed: Use consistent key
     queryFn: async ({ pageParam }: { pageParam: unknown }) => {
       const cursor = pageParam as string | undefined;
       return getMySessionsInfinite(cursor, 12);
@@ -37,10 +36,10 @@ export const Sessions = () => {
     getNextPageParam: (lastPage: PaginatedSessionsResponse) => {
       return lastPage.hasMore ? lastPage.nextCursor : undefined;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000, // Reduced to 30 seconds for more frequent updates
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Intersection Observer for infinite scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -67,20 +66,17 @@ export const Sessions = () => {
     };
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+  useEffect(() => {
+    const handleFocus = () => {
+      refetch();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [refetch]);
+
   const handleEditSession = (sessionId: string) => {
     router.push(`/session/editor/${sessionId}`);
-  };
-
-  const handleCreateNew = () => {
-    // This will be handled by the SessionsHeader component
-    toast("Create Session", {
-      description: "Use the 'Create New Session' button above.",
-    });
-  };
-
-  const handleFilterClick = () => {
-    toast("Filters", { description: "Opening filter options..." });
-    // Implement filter modal/dropdown logic here
   };
 
   // Flatten all pages and transform SessionData to the format expected by the UI components
@@ -94,9 +90,9 @@ export const Sessions = () => {
       title: session.title || "Untitled Session",
       description: session.json_file_url || "No description available",
       date: new Date(session.created_at).toLocaleDateString(),
-      duration: 0, // Not available in SessionData
-      participants: 0, // Not available in SessionData
-      maxParticipants: 0, // Not available in SessionData
+      duration: 0,
+      participants: 0,
+      maxParticipants: 0,
       status: session.status,
       category:
         session.tags?.length > 0 ? session.tags.join(", ") : "Uncategorized",
@@ -147,13 +143,8 @@ export const Sessions = () => {
 
   return (
     <>
-      <SessionGrid
-        sessions={filteredSessions}
-        onEdit={handleEditSession}
-        onCreateNew={handleCreateNew}
-      />
+      <SessionGrid sessions={filteredSessions} onEdit={handleEditSession} />
 
-      {/* Loading indicator for next page */}
       {isFetchingNextPage && (
         <div className="flex items-center justify-center py-8">
           <div className="flex items-center gap-2">
@@ -165,10 +156,8 @@ export const Sessions = () => {
         </div>
       )}
 
-      {/* Intersection observer target */}
       <div ref={observerRef} className="h-4" />
 
-      {/* End of results indicator */}
       {!hasNextPage && allSessions.length > 0 && (
         <div className="text-center py-8">
           <p className="text-muted-foreground text-sm">

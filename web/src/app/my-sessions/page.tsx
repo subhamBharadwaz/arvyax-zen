@@ -1,5 +1,5 @@
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
-import { getMySessions } from "@/features/session/session.api";
+import { getMySessionsInfinite } from "@/features/session/session.api";
 import { getQueryClient } from "@/lib/react-query";
 import { Sessions } from "@/features/session/components/my-sessions/sessions";
 import { SessionsHeader } from "@/features/session/components/my-sessions/sessions-header";
@@ -7,16 +7,18 @@ import { SessionsHeader } from "@/features/session/components/my-sessions/sessio
 export default async function MySessionsPage() {
   const queryClient = getQueryClient();
 
-  // Prefetch the sessions data on the server
   try {
-    await queryClient.prefetchQuery({
+    await queryClient.prefetchInfiniteQuery({
       queryKey: ["my-sessions"],
-      queryFn: getMySessions,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      queryFn: async ({ pageParam }: { pageParam: unknown }) => {
+        const cursor = pageParam as string | undefined;
+        return getMySessionsInfinite(cursor, 12);
+      },
+      initialPageParam: undefined as string | undefined,
+      staleTime: 30 * 1000, // Match the Sessions component staleTime
     });
   } catch (error) {
     console.error("Failed to prefetch sessions:", error);
-    // Continue rendering even if prefetch fails
   }
 
   return (
