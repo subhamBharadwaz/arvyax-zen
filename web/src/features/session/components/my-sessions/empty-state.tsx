@@ -1,13 +1,6 @@
-"use client";
-
-import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 
-interface EmptyStateProps {
-  onCreateNew?: () => void;
-}
-
-export const EmptyState = ({ onCreateNew }: EmptyStateProps) => {
+export const EmptyState = () => {
   return (
     <div className="text-center py-12">
       <div className="mx-auto w-24 h-24 bg-wellness-sage-light rounded-full flex items-center justify-center mb-4">
@@ -17,13 +10,6 @@ export const EmptyState = ({ onCreateNew }: EmptyStateProps) => {
       <p className="text-muted-foreground mb-4">
         Create your first wellness session to get started
       </p>
-      <Button
-        className="bg-primary hover:bg-wellness-mint transition-colors"
-        onClick={onCreateNew}
-      >
-        <Plus className="h-4 w-4 mr-2" />
-        Create Session
-      </Button>
     </div>
   );
 };
