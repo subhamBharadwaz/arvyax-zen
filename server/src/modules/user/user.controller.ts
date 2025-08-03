@@ -28,7 +28,7 @@ export const registerHandler = asyncHandler(
     }
 
     // if the user already signed up with the same email
-    const existingUser = await findUserSerice(email);
+    const existingUser = await findUserService(email);
     if (existingUser) {
       const message = "User already exists";
       return next(
