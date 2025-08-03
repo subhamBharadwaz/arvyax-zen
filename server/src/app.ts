@@ -20,9 +20,11 @@ const app = express();
 const errorHandler = new ErrorHandler(logger);
 
 // cors
+const origins = env.ORIGIN?.split(",").map((o) => o.trim()) ?? [];
+
 app.use(
   cors({
-    origin: env.ORIGIN,
+    origin: origins,
     credentials: true,
   }),
 );
