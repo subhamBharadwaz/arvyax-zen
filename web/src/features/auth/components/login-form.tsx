@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { loginSchema } from "../schema/auth-schema";
 import { loginUser } from "../auth.api";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -47,7 +48,9 @@ export const LoginForm = () => {
         router.push("/dashboard");
       }
     } catch (error: any) {
-      form.setError("email", { message: error.message });
+      const errorMessage = error?.message || "Login failed";
+      form.setError("email", { message: errorMessage });
+      toast.error(errorMessage);
     }
   };
 

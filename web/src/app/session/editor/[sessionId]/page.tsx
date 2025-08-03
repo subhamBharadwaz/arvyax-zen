@@ -1,4 +1,3 @@
-// app/sessions/editor/[sessionId]/page.tsx
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 import { fetchSessionById } from "@/features/session/session.api";
 import { SessionEditorForm } from "@/features/session/components/editor/session-editor-form";
@@ -14,7 +13,6 @@ export default async function SessionEditorPage({
   const { sessionId } = await params;
   const queryClient = getQueryClient();
 
-  // Prefetch the session data on the server
   try {
     await queryClient.prefetchQuery({
       queryKey: ["session", sessionId],
@@ -23,12 +21,23 @@ export default async function SessionEditorPage({
     });
   } catch (error) {
     console.error("Failed to prefetch session:", error);
-    // Continue rendering even if prefetch fails
   }
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <SessionEditorForm sessionId={sessionId} />
+      <div className="min-h-screen space-y-5 bg-background text-foreground">
+        <header className="w-full px-6 py-4 border-b border-border bg-card shadow-sm">
+          <h1 className="text-2xl font-semibold text-primary">
+            Edit Your Session
+          </h1>
+        </header>
+
+        <main className="flex items-center justify-center px-4 py-10">
+          <div className="w-full max-w-2xl">
+            <SessionEditorForm sessionId={sessionId} />
+          </div>
+        </main>
+      </div>
     </HydrationBoundary>
   );
 }

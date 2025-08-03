@@ -6,16 +6,11 @@ import { Session, SessionCard } from "./session-card";
 interface SessionGridProps {
   sessions: Session[];
   onEdit: (sessionId: string) => void;
-  onCreateNew?: () => void;
 }
 
-export const SessionGrid = ({
-  sessions,
-  onEdit,
-  onCreateNew,
-}: SessionGridProps) => {
+export const SessionGrid = ({ sessions, onEdit }: SessionGridProps) => {
   if (sessions.length === 0) {
-    return <EmptyState onCreateNew={onCreateNew} />;
+    return <EmptyState />;
   }
 
   return (
